@@ -16,6 +16,7 @@ module.exports = new class {
 
     listAll(request, response) {
         const { userId } = request.params;
+        this._notifySession(userId);
         return response.json({ error: false, content: this._contacts.filter(contact => contact.userId === parseInt(userId)).map(this._contactData.bind(this)) });
     }
 
@@ -23,7 +24,9 @@ module.exports = new class {
         const { userId } = request.params;
         const { id } = request.body;
 
-        const contact = { userId, contactId: id };
+        this._notifySession(userId);
+
+        const contact = { userId: parseInt(userId), contactId: id };
         this._contacts.push(contact);
 
         return response.json({ error: false, content: contact })
@@ -31,6 +34,8 @@ module.exports = new class {
 
     delete(request, response) {
         const { userId, id } = request.params;
+        
+        this._notifySession(userId);
 
         let i = this._contacts.length - 1;
         while(i >= 0) {
@@ -44,9 +49,17 @@ module.exports = new class {
     }
 
     _contactData(contact) {
-        const nickname = this._userRepository.getUserNickname(contact.contactId);
-        const online = this._sessionRepository.getUserOnline(contact.contactId);
-        return { nickname, online };
+        const UserController = require('./UserController');
+        const SessionController = require('./SessionController');
+
+        const nickname = UserController.getUserNickname(contact.contactId);
+        const online = SessionController.getUserOnline(contact.contactId);
+        return { id: contact.contactId, nickname, online };
+    }
+
+    _notifySession(userId) {
+        const SessionController = require('./SessionController');
+        SessionController.updateSession(userId);
     }
 
 };

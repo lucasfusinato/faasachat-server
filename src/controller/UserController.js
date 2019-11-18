@@ -42,6 +42,17 @@ module.exports = new class {
         return this._users.find(user => user.id === userId).nickname;
     }
 
+    authenticate(email, password) {
+        const user = this._users.find(user => user.email === email);
+        if(!user) {
+            throw new Error('User email not found.');
+        }
+        if(user.password !== password) {
+            throw new Error('Incorrect password.');
+        }
+        return user;
+    }
+
     _hidePassword(user) {
         user.password = user.password.replace(/./gi, '*');
         return user;

@@ -11,20 +11,28 @@ module.exports = new class {
     }
 
     create(request, response) {
-        const { userId, url } = request.body;
-        const session = { id: this._generateSessionId(userId), userId, lastUpdate: Date.now(), online: true, url };
+        const { email, password, url } = request.body;
+        
+        const UserController = require('./UserController');
+        
+        try {
+            const user = UserController.authenticate(email, password);
+            const session = { id: this._generateSessionId(user.id), userId: user.id, lastUpdate: Date.now(), online: true, url };
 
-        this._sessions.filter(session => session.userId === parseInt(userId)).forEach(session => session.online = false);
-        this._sessions.push(session);
+            this._sessions.filter(session => session.userId === user.id).forEach(session => session.online = false);
+            this._sessions.push(session);
 
-        return response.json({ error: false, content: session });
+            return response.json({ error: false, content: { session, user } });
+        } catch(error) {
+            return response.json({ error: true, content: error.message })
+        }
     }
 
     delete(request, response) {
         const { id } = request.params;
         
         let session = null;
-        for(const i of this._sessions) {
+        for(let i in this._sessions) {
             if(this._sessions[i].id === id) {
                 session = this._sessions[i];
                 session.lastUpdate = Date.now();
@@ -37,7 +45,15 @@ module.exports = new class {
     }
 
     getUserOnline(userId) {
-        return this._sessions.filter(session => session.userId === parseInt(userId)).some(this._checkOnlineSession.bind(this));
+        const session = this._sessions.filter(session => session.userId === parseInt(userId)).find(this._checkOnlineSession.bind(this));
+        if(session) {
+            return session.url;
+        }
+        return false;
+    }
+
+    updateSession(userId) {
+        this._sessions.filter(session => session.userId === parseInt(userId) && session.online).forEach(session => session.lastUpdate = Date.now());
     }
 
     _generateSessionId(userId) {
