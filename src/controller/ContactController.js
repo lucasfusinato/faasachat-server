@@ -22,14 +22,21 @@ module.exports = new class {
 
     create(request, response) {
         const { userId } = request.params;
-        const { id } = request.body;
+        const { nickname } = request.body;
 
         this._notifySession(userId);
 
-        const contact = { userId: parseInt(userId), contactId: id };
-        this._contacts.push(contact);
+        try {
+            const UserController = require('./UserController');
+            const id = UserController.getUserId(nickname);
 
-        return response.json({ error: false, content: contact })
+            const contact = { userId: parseInt(userId), contactId: id };
+            this._contacts.push(contact);
+
+            return response.json({ error: false, content: this._contactData(contact) })
+        } catch(error) {
+            return response.json({ error: true, content: 'Can not add this user.' });
+        }
     }
 
     delete(request, response) {

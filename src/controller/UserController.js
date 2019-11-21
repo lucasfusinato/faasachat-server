@@ -42,6 +42,10 @@ module.exports = new class {
         return this._users.find(user => user.id === userId).nickname;
     }
 
+    getUserId(userNickname) {
+        return this._users.find(user => user.nickname === userNickname).id;
+    }
+
     authenticate(email, password) {
         const user = this._users.find(user => user.email === email);
         if(!user) {
@@ -54,7 +58,8 @@ module.exports = new class {
     }
 
     _hidePassword(user) {
-        user.password = user.password.replace(/./gi, '*');
-        return user;
+        const hideUser = Object.assign({}, user);
+        hideUser.password = hideUser.password.replace(/./gi, '*');
+        return hideUser;
     }
 };
