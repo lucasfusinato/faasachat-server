@@ -1,65 +1,65 @@
-module.exports = new class {
+const User = require('../model/User');
+const Session = require('../model/Session');
 
-    constructor() {
-        this._users = [
-            { id: 1, nickname: 'lucas',    email: 'lucas@email.com',    password: '1234', yearOfBirth: 10 },
-            { id: 2, nickname: 'fusinato', email: 'fusinato@email.com', password: '1234', yearOfBirth: 20 },
-            { id: 3, nickname: 'wilhelm',  email: 'wilhelm@email.com',  password: '1234', yearOfBirth: 30 },
-            { id: 4, nickname: 'chiodini', email: 'chiodini@email.com', password: '1234', yearOfBirth: 40 },
-            { id: 5, nickname: 'zanis',    email: 'zanis@email.com',    password: '1234', yearOfBirth: 50 }
-        ];
-    }
+class UserController {
 
-    listAll(request, response) {
-        return response.json({ error: false, content: this._users.map(this._hidePassword) });
+    constructor(userModel, sessionModel) {
+        this.userModel = userModel;
+        this.sessionModel = sessionModel;
     }
 
     create(request, response) {
         const { nickname, email, password, yearOfBirth } = request.body;
+        const responseData = { error: false, content: null };
 
-        const user = { id : this._users.length, nickname, email, password, yearOfBirth };
-        this._users.push(user);
+        if(this.userModel.getUserByNickname(nickname)) {
+            responseData.error = true;
+            responseData.content = 'Nickname already registered.';
+        }
+        else if(this.userModel.getUserByEmail(email)) {
+            responseData.error = true;
+            responseData.content = 'Email already registered.';
+        }
+        
+        if(!responseData.error) {
+            const newUser = { nickname, email, password, yearOfBirth };
+            this.userModel.persist(newUser);
+            responseData.content = newUser;
+        }
 
-        return response.json({ error: false, content: this._hidePassword(user) });
+        return response.json(responseData);
     }
 
     update(request, response) {
-        const { id } = request.params;
+        const { userId } = request.params;
         const { nickname, email, password, yearOfBirth } = request.body;
-
-        const user = this._users.find(user => user.id === parseInt(id));
-        if(!user) {
-            return response.json({ error: true, content: 'User not found.' });
+        const responseData = { error: false, content: null };
+        
+        try {
+            this.sessionModel.updateSession(userId);
+        
+            const user = this.userModel.getUserById(userId);
+            if(!user) {
+                throw new Error('User not found.');
+            }
+            else if(user.nickname !== nickname && this.userModel.getUserByNickname(nickname)) {
+                throw new Error('Nickname already registered.');
+            }
+            else if(user.email !== email && this.userModel.getUserByEmail(email)) {
+                throw new Error('Email aready registered.');
+            }
+            
+            Object.assign(user, { nickname, email, password, yearOfBirth });
+            this.userModel.persist(user);
+            responseData.content = user;
+        } catch(error) {
+            responseData.error = true;
+            responseData.content = error.message;
         }
 
-        const userData = { nickname, email, password, yearOfBirth };
-        Object.assign(user, userData);
-
-        return response.json({ error: false, content: this._hidePassword(user) });
+        return response.json(responseData);
     }
 
-    getUserNickname(userId) {
-        return this._users.find(user => user.id === userId).nickname;
-    }
+}
 
-    getUserId(userNickname) {
-        return this._users.find(user => user.nickname === userNickname).id;
-    }
-
-    authenticate(email, password) {
-        const user = this._users.find(user => user.email === email);
-        if(!user) {
-            throw new Error('User email not found.');
-        }
-        if(user.password !== password) {
-            throw new Error('Incorrect password.');
-        }
-        return user;
-    }
-
-    _hidePassword(user) {
-        const hideUser = Object.assign({}, user);
-        hideUser.password = hideUser.password.replace(/./gi, '*');
-        return hideUser;
-    }
-};
+module.exports = new UserController(User, Session);

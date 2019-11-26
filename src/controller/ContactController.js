@@ -1,72 +1,84 @@
-module.exports = new class {
+const Contact = require('../model/Contact');
+const User = require('../model/User');
+const Session = require('../model/Session');
 
-    constructor() {
-        this._contacts = [
-            { userId: 1, contactId: 2 },
-            { userId: 1, contactId: 3 },
-            { userId: 1, contactId: 4 },
-            { userId: 1, contactId: 5 },
-            { userId: 2, contactId: 1 },
-            { userId: 2, contactId: 3 },
-            { userId: 3, contactId: 2 },
-            { userId: 3, contactId: 4 },
-            { userId: 4, contactId: 5 }
-        ];
+class ContactController {
+
+    constructor(contactModel, userModel, sessionModel) {
+        this.contactModel = contactModel;
+        this.sessionModel = sessionModel;
+        this.userModel = userModel;
     }
 
     listAll(request, response) {
         const { userId } = request.params;
-        this._notifySession(userId);
-        return response.json({ error: false, content: this._contacts.filter(contact => contact.userId === parseInt(userId)).map(this._contactData.bind(this)) });
+        const responseData = { error: false, content: null };
+
+        try {
+            this.sessionModel.updateSession(userId);
+            
+            responseData.content = this.contactModel.getContactsByUserId(userId).map(contact => {
+                return {
+                    id: contact.contactId,
+                    nickname: this.userModel.getUserById(contact.contactId).nickname,
+                    online: this.sessionModel.getOnlineAddress(contact.contactId)
+                };
+            });
+        } catch(error) {
+            responseData.error = true;
+            responseData.content = error.message;
+        }
+        
+        return response.json(responseData);
     }
 
     create(request, response) {
         const { userId } = request.params;
         const { nickname } = request.body;
-
-        this._notifySession(userId);
+        const responseData = { error: false, content: null };
 
         try {
-            const UserController = require('./UserController');
-            const id = UserController.getUserId(nickname);
+            this.sessionModel.updateSession(userId);
 
-            const contact = { userId: parseInt(userId), contactId: id };
-            this._contacts.push(contact);
+            const userContact = this.userModel.getUserByNickname(nickname);
+            if(!userContact) {
+                throw new Error('User does not exists.');
+            }
+            if(this.contactModel.getContactByIds(userId, userContact.id)) {
+                throw new Error('Contact already exists.');
+            }
 
-            return response.json({ error: false, content: this._contactData(contact) })
+            this.contactModel.persist({ userId, contactId: userContact.id })
+            responseData.content = this.userModel.getUserById(userContact.id);
         } catch(error) {
-            return response.json({ error: true, content: 'Can not add this user.' });
+            responseData.error = true;
+            responseData.content = error.message;
         }
+        
+        return response.json(responseData);
     }
 
     delete(request, response) {
-        const { userId, id } = request.params;
-        
-        this._notifySession(userId);
+        const { userId, contactId } = request.params;
+        const responseData = { error: false, content: null };
 
-        let i = this._contacts.length - 1;
-        while(i >= 0) {
-            if(this._contacts[i].userId === parseInt(userId) && this._contacts[i].contactId === parseInt(id)) {
-                this._contacts.splice(i, 1);
+        try {
+            this.sessionModel.updateSession(userId);
+            
+            const contact = this.contactModel.getContactByIds(userId, contactId);
+            if(!contact) {
+                throw new Error('Contact does not exists.');
             }
-            i--;
+
+            this.contactModel.delete(contact)
+        } catch(error) {
+            responseData.error = true;
+            responseData.content = error.message;
         }
 
         return response.json({ error: false, content: null });
     }
 
-    _contactData(contact) {
-        const UserController = require('./UserController');
-        const SessionController = require('./SessionController');
+}
 
-        const nickname = UserController.getUserNickname(contact.contactId);
-        const online = SessionController.getUserOnline(contact.contactId);
-        return { id: contact.contactId, nickname, online };
-    }
-
-    _notifySession(userId) {
-        const SessionController = require('./SessionController');
-        SessionController.updateSession(userId);
-    }
-
-};
+module.exports = new ContactController(Contact, User, Session);

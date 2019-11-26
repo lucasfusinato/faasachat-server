@@ -1,72 +1,46 @@
-module.exports = new class {
+const Session = require('../model/Session');
+const User = require('../model/User');
 
-    constructor() {
-        this._sessions = [
-            { id: 'abcd1', userId: 1, lastUpdate: Date.now(), online: true, url: '' },
-            { id: 'abcd2', userId: 2, lastUpdate: Date.now(), online: true, url: '' },
-            { id: 'abcd3', userId: 3, lastUpdate: Date.now(), online: true, url: '' },
-            { id: 'abcd4', userId: 4, lastUpdate: Date.now(), online: true, url: '' },
-            { id: 'abcd5', userId: 5, lastUpdate: Date.now(), online: true, url: '' }
-        ];
+class SessionController {
+
+    constructor(sessionModel, userModel) {
+        this.sessionModel = sessionModel;
+        this.userModel = userModel;
     }
 
     create(request, response) {
         const { email, password, url } = request.body;
-        
-        const UserController = require('./UserController');
+        const responseData = { error: false, content: null };
         
         try {
-            const user = UserController.authenticate(email, password);
-            const session = { id: this._generateSessionId(user.id), userId: user.id, lastUpdate: Date.now(), online: true, url };
+            const user = this.userModel.authenticate(email, password);
+            const session = { userId: user.id, url, lastUpdate: Date.now(), online: true };
 
-            this._sessions.filter(session => session.userId === user.id).forEach(session => session.online = false);
-            this._sessions.push(session);
+            this.sessionModel.persist(session);
 
-            return response.json({ error: false, content: { session, user } });
+            responseData.content = { session, user };
         } catch(error) {
-            return response.json({ error: true, content: error.message })
+            responseData.error = true;
+            responseData.content = error.message;
         }
+
+        return response.json(responseData);
     }
 
     delete(request, response) {
-        const { id } = request.params;
+        const { sessionId } = request.params;
         
-        let session = null;
-        for(let i in this._sessions) {
-            if(this._sessions[i].id === id) {
-                session = this._sessions[i];
-                session.lastUpdate = Date.now();
-                session.online = false;
-                break;
-            }
-        }
-
-        return response.json({ error: session === null, content: session });
-    }
-
-    getUserOnline(userId) {
-        const session = this._sessions.filter(session => session.userId === parseInt(userId)).find(this._checkOnlineSession.bind(this));
+        const session = this.sessionModel.getSessionById(sessionId);
         if(session) {
-            return session.url;
-        }
-        return false;
-    }
-
-    updateSession(userId) {
-        this._sessions.filter(session => session.userId === parseInt(userId) && session.online).forEach(session => session.lastUpdate = Date.now());
-    }
-
-    _generateSessionId(userId) {
-        const randomstring = require('randomstring');
-        const random = randomstring.generate(20);
-        const currentDate = new Date().toLocaleString().replace(/[^0-9]/gi, '');
-        return userId + currentDate + random;
-    }
-
-    _checkOnlineSession(session) {
-        if(session.online && Date.now() - session.lastUpdate > 10000) {
+            session.lastUpdate = Date.now();
             session.online = false;
+
+            this.sessionModel.persist(session);
         }
-        return session.online;
+
+        return response.json({ error: false });
     }
+    
 };
+
+module.exports = new SessionController(Session, User);
